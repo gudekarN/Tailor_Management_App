@@ -1,0 +1,1314 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  receipt_form_screen.dart
+//  Pranav Ladies Tailors — New / Edit Receipt Form
+// ════════════════════════════════════════════════════════════════════════════
+
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:pranav_tailors/core/theme/app_theme.dart';
+
+// ── Customer model ────────────────────────────────────────────────────────────
+
+class _LocalCustomer {
+  const _LocalCustomer({
+    required this.name,
+    required this.phone,
+    required this.address,
+    required this.initials,
+  });
+  final String name;
+  final String phone;
+  final String address;
+  final String initials;
+}
+
+const _kCustomers = [
+  _LocalCustomer(name: 'Priya Sharma',   phone: '9876543210', address: 'Shivaji Nagar, Pune - 411005', initials: 'PS'),
+  _LocalCustomer(name: 'Meena Patil',    phone: '9823456701', address: 'Sadashiv Peth, Pune - 411030', initials: 'MP'),
+  _LocalCustomer(name: 'Rekha Joshi',    phone: '9765432109', address: 'Kothrud, Pune - 411038',       initials: 'RJ'),
+  _LocalCustomer(name: 'Sunita Desai',   phone: '9812345670', address: 'Deccan, Pune - 411004',        initials: 'SD'),
+  _LocalCustomer(name: 'Kavita Rane',    phone: '9900112233', address: 'Aundh, Pune - 411007',         initials: 'KR'),
+  _LocalCustomer(name: 'Anita Kulkarni', phone: '9871234560', address: 'Wanowrie, Pune - 411040',      initials: 'AK'),
+  _LocalCustomer(name: 'Pooja Nair',     phone: '9654321098', address: 'Baner, Pune - 411045',         initials: 'PN'),
+  _LocalCustomer(name: 'Lata Sawant',    phone: '9789012345', address: 'Hadapsar, Pune - 411028',      initials: 'LS'),
+  _LocalCustomer(name: 'Deepa Chavan',   phone: '9512345678', address: 'Viman Nagar, Pune - 411014',   initials: 'DC'),
+  _LocalCustomer(name: 'Usha Deshpande', phone: '9933445566', address: 'Pimpri, Pune - 411018',        initials: 'UD'),
+];
+
+// ── Design gallery placeholders ───────────────────────────────────────────────
+
+class _DesignPlaceholder {
+  const _DesignPlaceholder(this.label, this.icon, this.color);
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+const _kDesignPlaceholders = [
+  _DesignPlaceholder('Blouse A',   Icons.checkroom_rounded,       AppColors.primary),
+  _DesignPlaceholder('Blouse B',   Icons.dry_cleaning_rounded,    AppColors.primary),
+  _DesignPlaceholder('Dress A',    Icons.accessibility_new_rounded, AppColors.secondary),
+  _DesignPlaceholder('Dress B',    Icons.woman_rounded,           AppColors.secondary),
+  _DesignPlaceholder('Salwar A',   Icons.straighten_rounded,      AppColors.urgent),
+  _DesignPlaceholder('Custom',     Icons.add_circle_outline_rounded, AppColors.textSecondary),
+];
+
+// ── Item row holder ───────────────────────────────────────────────────────────
+
+class _ItemRow {
+  _ItemRow();
+  final itemNameCtrl = TextEditingController();
+  final priceCtrl    = TextEditingController();
+  XFile? designImage;
+
+  void dispose() {
+    itemNameCtrl.dispose();
+    priceCtrl.dispose();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Screen
+// ════════════════════════════════════════════════════════════════════════════
+
+class ReceiptFormScreen extends StatefulWidget {
+  const ReceiptFormScreen({super.key});
+  @override
+  State<ReceiptFormScreen> createState() => _ReceiptFormScreenState();
+}
+
+class _ReceiptFormScreenState extends State<ReceiptFormScreen> {
+  final _picker  = ImagePicker();
+  final _moneyFmt = NumberFormat('#,##0.00');
+
+  // ── Auto fields ───────────────────────────────────────────────────────────
+  final String _receiptNo  = 'PLT-${DateTime.now().year}-${(DateTime.now().millisecondsSinceEpoch % 900 + 100)}';
+  final String _dateStr    = DateFormat('dd MMM yyyy').format(DateTime.now());
+  static const String _genBy = 'Manager';
+
+  // ── Customer ──────────────────────────────────────────────────────────────
+  _LocalCustomer? _customer;
+
+  // ── Items ─────────────────────────────────────────────────────────────────
+  final List<_ItemRow> _items = [_ItemRow()];
+
+  // ── Extra charges ─────────────────────────────────────────────────────────
+  final _designExtraCtrl = TextEditingController();
+  bool  _isUrgent        = false;
+  final _urgentCostCtrl  = TextEditingController();
+
+  // ── Sample images ─────────────────────────────────────────────────────────
+  final List<XFile> _sampleImages = [];
+
+  // ── Delivery date ─────────────────────────────────────────────────────────
+  DateTime? _deliveryDate;
+
+  // ── Payment ───────────────────────────────────────────────────────────────
+  final _advanceCtrl = TextEditingController();
+
+  // ── Computed totals ───────────────────────────────────────────────────────
+  double get _itemsTotal  => _items.fold(0.0, (s, r) => s + (double.tryParse(r.priceCtrl.text) ?? 0));
+  double get _designExtra => double.tryParse(_designExtraCtrl.text) ?? 0;
+  double get _urgentAmt   => _isUrgent ? (double.tryParse(_urgentCostCtrl.text) ?? 0) : 0;
+  double get _total       => _itemsTotal + _designExtra + _urgentAmt;
+  double get _advance     => double.tryParse(_advanceCtrl.text) ?? 0;
+  double get _remaining   => _total - _advance;
+
+  @override
+  void dispose() {
+    for (final r in _items) r.dispose();
+    _designExtraCtrl.dispose();
+    _urgentCostCtrl.dispose();
+    _advanceCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Item actions ──────────────────────────────────────────────────────────
+  void _addItem() => setState(() => _items.add(_ItemRow()));
+
+  void _removeItem(int i) {
+    if (_items.length <= 1) return;
+    _items[i].dispose();
+    setState(() => _items.removeAt(i));
+  }
+
+  // ── Design image picker (three-option sheet) ──────────────────────────────
+  void _showDesignPickerSheet(int i) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _sheetHandle(),
+            _sheetTitle('Select Design Image'),
+            _sheetOption(
+              icon: Icons.camera_alt_rounded,
+              title: 'Take Photo',
+              subtitle: 'Open camera to capture design',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  final img = await _picker.pickImage(
+                      source: ImageSource.camera, imageQuality: 80);
+                  if (img != null) setState(() => _items[i].designImage = img);
+                } catch (_) {}
+              },
+            ),
+            _sheetOption(
+              icon: Icons.collections_rounded,
+              title: 'Design Gallery',
+              subtitle: 'Pick from existing app designs',
+              onTap: () {
+                Navigator.pop(context);
+                _showDesignGalleryDialog(i);
+              },
+            ),
+            _sheetOption(
+              icon: Icons.photo_library_rounded,
+              title: 'Choose from Gallery',
+              subtitle: 'Select from device photos',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  final img = await _picker.pickImage(
+                      source: ImageSource.gallery, imageQuality: 80);
+                  if (img != null) setState(() => _items[i].designImage = img);
+                } catch (_) {}
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Design gallery dialog (placeholder with sample design tiles) ───────────
+  void _showDesignGalleryDialog(int i) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Design Gallery',
+          style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 260,
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _kDesignPlaceholders.length,
+            itemBuilder: (_, idx) {
+              final design = _kDesignPlaceholders[idx];
+              return GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  // In production, set design from app storage.
+                  // For now, we simply close — user must upload via camera/gallery.
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: design.color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: design.color.withValues(alpha: 0.40)),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(design.icon, color: design.color, size: 28),
+                      const SizedBox(height: 4),
+                      Text(
+                        design.label,
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: design.color),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Sample image picker (two-option sheet) ─────────────────────────────────
+  void _showSampleImageSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _sheetHandle(),
+            _sheetTitle('Add Reference Image'),
+            _sheetOption(
+              icon: Icons.camera_alt_rounded,
+              title: 'Take Photo',
+              subtitle: 'Open camera to capture',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  final img = await _picker.pickImage(
+                      source: ImageSource.camera, imageQuality: 80);
+                  if (img != null) setState(() => _sampleImages.add(img));
+                } catch (_) {}
+              },
+            ),
+            _sheetOption(
+              icon: Icons.photo_library_rounded,
+              title: 'Choose from Gallery',
+              subtitle: 'Select one or more from device',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  final imgs = await _picker.pickMultiImage(imageQuality: 80);
+                  if (imgs.isNotEmpty) setState(() => _sampleImages.addAll(imgs));
+                } catch (_) {}
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Bottom-sheet helper widgets ────────────────────────────────────────────
+  Widget _sheetHandle() => Container(
+        margin: const EdgeInsets.only(top: 10, bottom: 6),
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: AppColors.border,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
+
+  Widget _sheetTitle(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      );
+
+  Widget _sheetOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) =>
+      ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.primaryLight,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 22),
+        ),
+        title: Text(title,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary)),
+        subtitle: Text(subtitle,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                color: AppColors.textHint)),
+        onTap: onTap,
+      );
+
+  Future<void> _pickDelivery() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (ctx, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (d != null) setState(() => _deliveryDate = d);
+  }
+
+  // ── Customer selector sheet ───────────────────────────────────────────────
+  void _openCustomerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CustomerSelectorSheet(
+        onSelect: (c) => setState(() => _customer = c),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: _buildAppBar(),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                children: [
+                  _buildCustomerCard(),   const SizedBox(height: 14),
+                  _buildInfoCard(),       const SizedBox(height: 14),
+                  _buildItemsCard(),      const SizedBox(height: 14),
+                  _buildExtraCard(),      const SizedBox(height: 14),
+                  _buildSamplesCard(),    const SizedBox(height: 14),
+                  _buildDeliveryCard(),   const SizedBox(height: 14),
+                  _buildPaymentCard(),    const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+          _buildSaveBar(),
+        ],
+      ),
+    );
+  }
+
+  AppBar _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      foregroundColor: Colors.white,
+      backgroundColor: AppColors.primary,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.topbarStart, AppColors.topbarEnd],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
+      title: Text('New Receipt',
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      actions: const [],
+    );
+  }
+
+  // ── Customer card ─────────────────────────────────────────────────────────
+  Widget _buildCustomerCard() {
+    return _FormCard(
+      title: 'Customer',
+      icon: Icons.person_rounded,
+      child: _customer != null
+          ? Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.30)),
+              ),
+              child: Row(
+                children: [
+                  _InitialsAvatar(initials: _customer!.initials, color: AppColors.primary, size: 42),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_customer!.name,
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600)),
+                        Text(_customer!.phone,
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                        Text(_customer!.address,
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_rounded, size: 18, color: AppColors.primary),
+                    onPressed: _openCustomerSheet,
+                    tooltip: 'Change',
+                  ),
+                ],
+              ),
+            )
+          : GestureDetector(
+              onTap: _openCustomerSheet,
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Search and select customer…',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint)),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  // ── Receipt info card (read-only) ─────────────────────────────────────────
+  Widget _buildInfoCard() {
+    return _FormCard(
+      title: 'Receipt Information',
+      icon: Icons.receipt_long_rounded,
+      child: Column(
+        children: [
+          _InfoRow(label: 'Receipt No.',  value: _receiptNo),
+          const SizedBox(height: 6),
+          _InfoRow(label: 'Date',         value: _dateStr),
+          const SizedBox(height: 6),
+          _InfoRow(label: 'Generated By', value: _genBy),
+        ],
+      ),
+    );
+  }
+
+  // ── Items table card ──────────────────────────────────────────────────────
+  Widget _buildItemsCard() {
+    final headerStyle = TextStyle(fontFamily: 'Poppins', 
+        fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary);
+
+    return _FormCard(
+      title: 'Order Items',
+      icon: Icons.list_alt_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              SizedBox(width: 28, child: Text('Sr.', style: headerStyle)),
+              const SizedBox(width: 6),
+              Expanded(flex: 3, child: Text('Item Name', style: headerStyle)),
+              const SizedBox(width: 6),
+              SizedBox(width: 50, child: Text('Design', style: headerStyle, textAlign: TextAlign.center)),
+              const SizedBox(width: 6),
+              SizedBox(width: 76, child: Text('Price (₹)', style: headerStyle, textAlign: TextAlign.right)),
+              const SizedBox(width: 28),
+            ],
+          ),
+          const Divider(color: AppColors.border, height: 14),
+
+          // Item rows
+          ...List.generate(_items.length, (i) => _buildItemRow(i)),
+
+          const SizedBox(height: 4),
+          // Add row button
+          OutlinedButton.icon(
+            onPressed: _addItem,
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: Text('Add Row', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              backgroundColor: AppColors.primaryLight.withValues(alpha: 0.15),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+
+          const Divider(color: AppColors.border, height: 20),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text('Subtotal: ₹${_moneyFmt.format(_itemsTotal)}',
+                style: TextStyle(fontFamily: 'Poppins', 
+                    fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(int i) {
+    final row = _items[i];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Sr.No
+          SizedBox(
+            width: 28,
+            child: Text('${i + 1}.',
+                style: TextStyle(fontFamily: 'Poppins', 
+                    fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textHint)),
+          ),
+          const SizedBox(width: 6),
+          // Item name
+          Expanded(
+            flex: 3,
+            child: _miniField(row.itemNameCtrl, 'Item…'),
+          ),
+          const SizedBox(width: 6),
+          // Design image
+          GestureDetector(
+            onTap: () => _showDesignPickerSheet(i),
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+                image: row.designImage != null
+                    ? DecorationImage(
+                        image: FileImage(File(row.designImage!.path)),
+                        fit: BoxFit.cover)
+                    : null,
+              ),
+              child: row.designImage == null
+                  ? const Icon(Icons.add_photo_alternate_rounded,
+                      size: 20, color: AppColors.textHint)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Price
+          SizedBox(
+            width: 76,
+            child: _miniField(row.priceCtrl, '0.00',
+                textAlign: TextAlign.right,
+                inputType: const TextInputType.numberWithOptions(decimal: true),
+                formatter: FilteringTextInputFormatter.allow(
+                    RegExp(r'^\d+\.?\d{0,2}'))),
+          ),
+          // Delete
+          SizedBox(
+            width: 28,
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.remove_circle_outline_rounded,
+                  size: 18,
+                  color: _items.length > 1 ? AppColors.error : AppColors.border),
+              onPressed: _items.length > 1 ? () => _removeItem(i) : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Extra charges + urgent card ───────────────────────────────────────────
+  Widget _buildExtraCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _isUrgent ? const Color(0xFFFFF3E0) : AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppShadows.card,
+        border: Border.all(
+          color: _isUrgent ? AppColors.urgent : AppColors.border,
+          width: _isUrgent ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Card header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            decoration: BoxDecoration(
+              color: _isUrgent
+                  ? AppColors.urgent.withValues(alpha: 0.10)
+                  : AppColors.surface2,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border(
+                  bottom: BorderSide(
+                      color: _isUrgent
+                          ? AppColors.urgent.withValues(alpha: 0.30)
+                          : AppColors.border)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isUrgent ? Icons.bolt_rounded : Icons.add_circle_outline_rounded,
+                  size: 18,
+                  color: _isUrgent ? AppColors.urgent : AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Text('Extra Charges',
+                    style: TextStyle(fontFamily: 'Poppins', 
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _isUrgent ? AppColors.urgent : AppColors.textPrimary)),
+                const Spacer(),
+                Text('Urgent',
+                    style: TextStyle(fontFamily: 'Poppins', 
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _isUrgent ? AppColors.urgent : AppColors.textHint)),
+                Switch(
+                  value: _isUrgent,
+                  onChanged: (v) => setState(() => _isUrgent = v),
+                  activeThumbColor: AppColors.urgent,
+                  trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
+                      ? AppColors.urgent.withValues(alpha: 0.30)
+                      : AppColors.border),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _LabeledField(
+                  label: 'Design Extra Charge',
+                  child: _miniField(_designExtraCtrl, '₹ 0.00',
+                      inputType: const TextInputType.numberWithOptions(decimal: true),
+                      formatter: FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))),
+                ),
+                if (_isUrgent) ...[
+                  const SizedBox(height: 12),
+                  _LabeledField(
+                    label: 'Urgent Cost',
+                    child: _miniField(_urgentCostCtrl, '₹ 0.00',
+                        urgentBorder: true,
+                        inputType: const TextInputType.numberWithOptions(decimal: true),
+                        formatter: FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Sample images card ────────────────────────────────────────────────────
+  Widget _buildSamplesCard() {
+    return _FormCard(
+      title: 'Sample / Reference Images',
+      icon: Icons.photo_library_rounded,
+      child: SizedBox(
+        height: 90,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            // Add button
+            GestureDetector(
+              onTap: _showSampleImageSheet,
+              child: Container(
+                width: 80,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.primary),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.add_photo_alternate_rounded,
+                        color: AppColors.primary, size: 24),
+                    const SizedBox(height: 4),
+                    Text('Add',
+                        style: TextStyle(fontFamily: 'Poppins', 
+                            fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ),
+            // Thumbnails
+            ...List.generate(_sampleImages.length, (i) => Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 80,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                    image: DecorationImage(
+                        image: FileImage(File(_sampleImages[i].path)),
+                        fit: BoxFit.cover),
+                  ),
+                ),
+                Positioned(
+                  top: -6,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _sampleImages.removeAt(i)),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: const BoxDecoration(
+                          color: AppColors.error, shape: BoxShape.circle),
+                      child: const Icon(Icons.close_rounded,
+                          size: 12, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Delivery date card ────────────────────────────────────────────────────
+  Widget _buildDeliveryCard() {
+    final picked = _deliveryDate != null;
+    return _FormCard(
+      title: 'Delivery Date',
+      icon: Icons.local_shipping_rounded,
+      child: GestureDetector(
+        onTap: _pickDelivery,
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: picked
+                ? AppColors.primaryLight.withValues(alpha: 0.20)
+                : AppColors.surface2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: picked ? AppColors.primary : AppColors.border,
+                width: picked ? 1.5 : 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.calendar_today_rounded,
+                  size: 18,
+                  color: picked ? AppColors.primary : AppColors.textHint),
+              const SizedBox(width: 10),
+              Text(
+                picked
+                    ? DateFormat('EEEE, dd MMM yyyy').format(_deliveryDate!)
+                    : 'Tap to select delivery date',
+                style: TextStyle(fontFamily: 'Poppins', 
+                  fontSize: 13.5,
+                  fontWeight: picked ? FontWeight.w600 : FontWeight.w400,
+                  color: picked ? AppColors.primary : AppColors.textHint,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Payment summary card ──────────────────────────────────────────────────
+  Widget _buildPaymentCard() {
+    final overpaid = _remaining < 0;
+    return _FormCard(
+      title: 'Payment Summary',
+      icon: Icons.account_balance_wallet_rounded,
+      child: Column(
+        children: [
+          _SummaryRow(label: 'Items Subtotal', value: '₹${_moneyFmt.format(_itemsTotal)}'),
+          if (_designExtra > 0)
+            _SummaryRow(label: 'Design Extra', value: '+₹${_moneyFmt.format(_designExtra)}'),
+          if (_isUrgent && _urgentAmt > 0)
+            _SummaryRow(label: 'Urgent Charge',
+                value: '+₹${_moneyFmt.format(_urgentAmt)}',
+                valueColor: AppColors.urgent),
+          const Divider(color: AppColors.border, height: 18),
+          _SummaryRow(
+              label: 'Total Amount',
+              value: '₹${_moneyFmt.format(_total)}',
+              isBold: true),
+          const SizedBox(height: 14),
+          _LabeledField(
+            label: 'Advance Paid',
+            child: _miniField(_advanceCtrl, '₹ 0.00',
+                inputType: const TextInputType.numberWithOptions(decimal: true),
+                formatter: FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: overpaid ? AppColors.errorLight : AppColors.primaryLight.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: overpaid
+                      ? AppColors.error.withValues(alpha: 0.40)
+                      : AppColors.primary.withValues(alpha: 0.30)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Remaining',
+                    style: TextStyle(fontFamily: 'Poppins', 
+                        fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(
+                  '₹${_moneyFmt.format(_remaining.abs())}${overpaid ? ' (Overpaid)' : ''}',
+                  style: TextStyle(fontFamily: 'Poppins', 
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: overpaid ? AppColors.error : AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Save / Preview bar ────────────────────────────────────────────────────
+  Widget _buildSaveBar() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: const Border(top: BorderSide(color: AppColors.border)),
+        boxShadow: AppShadows.elevated,
+      ),
+      child: Row(
+        children: [
+          // Preview
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.visibility_rounded, size: 18),
+              label: Text('Preview',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Save
+          Expanded(
+            flex: 2,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [AppColors.topbarStart, AppColors.topbarEnd]),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ElevatedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.save_rounded, size: 18, color: Colors.white),
+                label: Text('Save Receipt',
+                    style: TextStyle(fontFamily: 'Poppins', 
+                        fontWeight: FontWeight.w600, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Mini text field helper ────────────────────────────────────────────────
+  Widget _miniField(
+    TextEditingController ctrl,
+    String hint, {
+    TextInputType? inputType,
+    TextInputFormatter? formatter,
+    TextAlign textAlign = TextAlign.left,
+    bool urgentBorder = false,
+  }) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: inputType,
+      inputFormatters: formatter != null ? [formatter] : null,
+      textAlign: textAlign,
+      style: TextStyle(fontFamily: 'Poppins', fontSize: 13.5),
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(fontFamily: 'Poppins', fontSize: 12.5, color: AppColors.textHint),
+        filled: true,
+        fillColor: AppColors.background,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(
+                color: urgentBorder ? AppColors.urgent : AppColors.primary,
+                width: 1.5)),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Customer Selector Bottom Sheet
+// ════════════════════════════════════════════════════════════════════════════
+
+class _CustomerSelectorSheet extends StatefulWidget {
+  const _CustomerSelectorSheet({required this.onSelect});
+  final ValueChanged<_LocalCustomer> onSelect;
+
+  @override
+  State<_CustomerSelectorSheet> createState() => _CustomerSelectorSheetState();
+}
+
+class _CustomerSelectorSheetState extends State<_CustomerSelectorSheet> {
+  final _searchCtrl = TextEditingController();
+  List<_LocalCustomer> _filtered = _kCustomers;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      final q = _searchCtrl.text.trim().toLowerCase();
+      setState(() {
+        _filtered = q.isEmpty
+            ? _kCustomers
+            : _kCustomers
+                .where((c) =>
+                    c.name.toLowerCase().contains(q) || c.phone.contains(q))
+                .toList();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.92,
+      minChildSize: 0.50,
+      builder: (_, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: AppColors.border, borderRadius: BorderRadius.circular(4)),
+            ),
+            // Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text('Select Customer',
+                      style: TextStyle(fontFamily: 'Poppins', 
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Search
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search by name or phone…',
+                  hintStyle:
+                      TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: AppColors.textHint, size: 20),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.border)),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                          color: AppColors.primary, width: 1.5)),
+                ),
+              ),
+            ),
+            // List
+            Expanded(
+              child: ListView.separated(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                itemCount: _filtered.length,
+                separatorBuilder: (_, __) => const Divider(
+                    color: AppColors.border, height: 1),
+                itemBuilder: (_, i) {
+                  final c = _filtered[i];
+                  return ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    leading: _InitialsAvatar(
+                        initials: c.initials, color: AppColors.primary, size: 44),
+                    title: Text(c.name,
+                        style: TextStyle(fontFamily: 'Poppins', 
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    subtitle: Text(c.phone,
+                        style: TextStyle(fontFamily: 'Poppins', 
+                            fontSize: 12, color: AppColors.textSecondary)),
+                    onTap: () {
+                      widget.onSelect(c);
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Shared helper widgets
+// ════════════════════════════════════════════════════════════════════════════
+
+class _FormCard extends StatelessWidget {
+  const _FormCard({required this.title, required this.icon, required this.child});
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppShadows.card,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              border: const Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(title,
+                    style: TextStyle(fontFamily: 'Poppins', 
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+              ],
+            ),
+          ),
+          Padding(padding: const EdgeInsets.all(16), child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label,
+              style: TextStyle(fontFamily: 'Poppins', 
+                  fontSize: 12.5,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500)),
+        ),
+        const Text(': ',
+            style: TextStyle(color: AppColors.textHint)),
+        Expanded(
+          child: Text(value,
+              style: TextStyle(fontFamily: 'Poppins', 
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+        ),
+      ],
+    );
+  }
+}
+
+class _LabeledField extends StatelessWidget {
+  const _LabeledField({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(fontFamily: 'Poppins', 
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 5),
+        child,
+      ],
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({
+    required this.label,
+    required this.value,
+    this.isBold = false,
+    this.valueColor,
+  });
+  final String label;
+  final String value;
+  final bool isBold;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(fontFamily: 'Poppins', 
+                  fontSize: isBold ? 14 : 13,
+                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
+                  color: AppColors.textSecondary)),
+          Text(value,
+              style: TextStyle(fontFamily: 'Poppins', 
+                  fontSize: isBold ? 15 : 13,
+                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                  color: valueColor ?? AppColors.textPrimary)),
+        ],
+      ),
+    );
+  }
+}
+
+class _InitialsAvatar extends StatelessWidget {
+  const _InitialsAvatar(
+      {required this.initials, required this.color, required this.size});
+  final String initials;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.30), width: 1.5),
+      ),
+      child: Center(
+        child: Text(initials,
+            style: TextStyle(fontFamily: 'Poppins', 
+                fontSize: size * 0.30,
+                fontWeight: FontWeight.w700,
+                color: color)),
+      ),
+    );
+  }
+}

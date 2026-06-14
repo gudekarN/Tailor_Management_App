@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 
 // ─── Re-export convenience ───────────────────────────────────────────────────
 export 'package:flutter/material.dart' show ThemeData, BuildContext, Theme;
@@ -114,7 +114,7 @@ abstract class AppTextStyles {
   // ── Headings ─────────────────────────────────────────────────────────────
 
   /// 28 sp · Bold — Page titles, hero text.
-  static TextStyle get headingLarge => GoogleFonts.poppins(
+  static TextStyle get headingLarge => TextStyle(fontFamily: 'Poppins', 
     fontSize: 28,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
@@ -123,7 +123,7 @@ abstract class AppTextStyles {
   );
 
   /// 22 sp · SemiBold — Section headings, dialog titles.
-  static TextStyle get headingMedium => GoogleFonts.poppins(
+  static TextStyle get headingMedium => TextStyle(fontFamily: 'Poppins', 
     fontSize: 22,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
@@ -132,7 +132,7 @@ abstract class AppTextStyles {
   );
 
   /// 18 sp · SemiBold — Card headings, sub-sections.
-  static TextStyle get headingSmall => GoogleFonts.poppins(
+  static TextStyle get headingSmall => TextStyle(fontFamily: 'Poppins', 
     fontSize: 18,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
@@ -142,7 +142,7 @@ abstract class AppTextStyles {
   // ── Subheading ────────────────────────────────────────────────────────────
 
   /// 16 sp · Medium — List item titles, row labels.
-  static TextStyle get subheading => GoogleFonts.poppins(
+  static TextStyle get subheading => TextStyle(fontFamily: 'Poppins', 
     fontSize: 16,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
@@ -152,7 +152,7 @@ abstract class AppTextStyles {
   // ── Body ──────────────────────────────────────────────────────────────────
 
   /// 14 sp · Regular — General body text.
-  static TextStyle get body => GoogleFonts.poppins(
+  static TextStyle get body => TextStyle(fontFamily: 'Poppins', 
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textPrimary,
@@ -160,7 +160,7 @@ abstract class AppTextStyles {
   );
 
   /// 14 sp · Medium — Emphasised body text, clickable items.
-  static TextStyle get bodyMedium => GoogleFonts.poppins(
+  static TextStyle get bodyMedium => TextStyle(fontFamily: 'Poppins', 
     fontSize: 14,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
@@ -168,7 +168,7 @@ abstract class AppTextStyles {
   );
 
   /// 14 sp · Regular — Secondary / muted body text.
-  static TextStyle get bodySecondary => GoogleFonts.poppins(
+  static TextStyle get bodySecondary => TextStyle(fontFamily: 'Poppins', 
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
@@ -178,7 +178,7 @@ abstract class AppTextStyles {
   // ── Caption ───────────────────────────────────────────────────────────────
 
   /// 12 sp · Regular — Timestamps, helper text, footnotes.
-  static TextStyle get caption => GoogleFonts.poppins(
+  static TextStyle get caption => TextStyle(fontFamily: 'Poppins', 
     fontSize: 12,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
@@ -186,7 +186,7 @@ abstract class AppTextStyles {
   );
 
   /// 12 sp · Medium — Muted labels, chip text.
-  static TextStyle get captionMedium => GoogleFonts.poppins(
+  static TextStyle get captionMedium => TextStyle(fontFamily: 'Poppins', 
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
@@ -196,7 +196,7 @@ abstract class AppTextStyles {
   // ── Label ─────────────────────────────────────────────────────────────────
 
   /// 11 sp · SemiBold — Badges, status pills, tab bar labels.
-  static TextStyle get label => GoogleFonts.poppins(
+  static TextStyle get label => TextStyle(fontFamily: 'Poppins', 
     fontSize: 11,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
@@ -205,7 +205,7 @@ abstract class AppTextStyles {
   );
 
   /// 10 sp · Bold — Tiny overline / badge count text.
-  static TextStyle get labelSmall => GoogleFonts.poppins(
+  static TextStyle get labelSmall => TextStyle(fontFamily: 'Poppins', 
     fontSize: 10,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
@@ -216,7 +216,7 @@ abstract class AppTextStyles {
   // ── Button ────────────────────────────────────────────────────────────────
 
   /// 15 sp · SemiBold — Primary and secondary button labels.
-  static TextStyle get button => GoogleFonts.poppins(
+  static TextStyle get button => TextStyle(fontFamily: 'Poppins', 
     fontSize: 15,
     fontWeight: FontWeight.w600,
     color: AppColors.onPrimary,
@@ -227,7 +227,7 @@ abstract class AppTextStyles {
   // ── Input ─────────────────────────────────────────────────────────────────
 
   /// 14 sp · Regular — Text field input value.
-  static TextStyle get input => GoogleFonts.poppins(
+  static TextStyle get input => TextStyle(fontFamily: 'Poppins', 
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textPrimary,
@@ -235,7 +235,7 @@ abstract class AppTextStyles {
   );
 
   /// 13 sp · Regular — Placeholder / hint inside text fields.
-  static TextStyle get inputHint => GoogleFonts.poppins(
+  static TextStyle get inputHint => TextStyle(fontFamily: 'Poppins', 
     fontSize: 13,
     fontWeight: FontWeight.w400,
     color: AppColors.textHint,
@@ -439,7 +439,7 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
 
       // ── Typography ──────────────────────────────────────────────────────
-      textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+      textTheme: ThemeData.light().textTheme.apply(fontFamily: 'Poppins').copyWith(
         displayLarge:   AppTextStyles.headingLarge,
         displayMedium:  AppTextStyles.headingMedium,
         displaySmall:   AppTextStyles.headingSmall,

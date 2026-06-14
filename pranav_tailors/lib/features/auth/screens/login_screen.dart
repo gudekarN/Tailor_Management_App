@@ -15,7 +15,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 
 // ─── Inline brand tokens ──────────────────────────────────────────────────────
 const Color _kBg          = Color(0xFFFFFBFD);
@@ -239,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen>
                           // ── PIN prompt label ───────────────────────────
                           Text(
                             'Enter your PIN',
-                            style: GoogleFonts.poppins(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                               color: _kTextSub,
@@ -267,7 +267,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 ? Text(
                                     'Incorrect PIN. Please try again.',
                                     textAlign: TextAlign.center,
-                                    style: GoogleFonts.poppins(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
                                       color: const Color(0xFFB71C1C),
@@ -376,7 +376,7 @@ class _Header extends StatelessWidget {
           Text(
             'Pranav Ladies Tailors',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: compact ? 18 : 21,
               fontWeight: FontWeight.w700,
               color: _kPrimary,
@@ -389,9 +389,9 @@ class _Header extends StatelessWidget {
 
           // ── Tagline ──────────────────────────────────────────────────────
           Text(
-            'Ladies Dress & Blouse Specialist  ·  Pico, Fall, Beading Center',
+            'Ladies Dress & Blouse Specialist  |  Pico, Fall, Beading Center',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: compact ? 10.5 : 11.5,
               fontWeight: FontWeight.w400,
               color: _kTextSub,
@@ -477,7 +477,7 @@ class _RoleCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   label,
-                  style: GoogleFonts.poppins(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: selected ? _kPrimary : _kTextPrimary,
@@ -486,7 +486,7 @@ class _RoleCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   desc,
-                  style: GoogleFonts.poppins(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
                     color: selected ? _kTextSub : _kTextHint,
@@ -647,7 +647,7 @@ class _NumKey extends StatelessWidget {
               ? Icon(Icons.backspace_outlined, size: 22, color: _kTextSub)
               : Text(
                   label,
-                  style: GoogleFonts.poppins(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 22,
                     fontWeight: FontWeight.w500,
                     color: _kTextPrimary,
@@ -726,7 +726,7 @@ class _LoginButton extends StatelessWidget {
                   children: [
                     Text(
                       'Login',
-                      style: GoogleFonts.poppins(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,

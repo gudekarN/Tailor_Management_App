@@ -43,16 +43,21 @@ import 'package:pranav_tailors/features/auth/screens/login_screen.dart';
 // Manager
 import 'package:pranav_tailors/features/manager/screens/manager_shell.dart';
 import 'package:pranav_tailors/features/manager/screens/manager_home_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_customers_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_work_queue_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_calendar_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_receipt_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_employees_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_employee_payment_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_expense_tracker_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/manager_notice_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/customers_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/work_queue_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/calendar_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/receipt_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/receipt_view_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/employees_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/employee_payment_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/expense_tracker_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/notice_screen.dart';
 import 'package:pranav_tailors/features/manager/screens/manager_design_gallery_screen.dart';
 import 'package:pranav_tailors/features/manager/screens/manager_settings_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/customer_form_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/customer_detail_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/receipt_form_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/employee_detail_screen.dart';
 
 // Employee
 import 'package:pranav_tailors/features/employee/screens/employee_shell.dart';
@@ -86,6 +91,9 @@ abstract class AppRoutes {
   static const String managerNotice          = '/manager/notice';
   static const String managerDesignGallery   = '/manager/design-gallery';
   static const String managerSettings        = '/manager/settings';
+  static const String managerCustomerForm    = '/manager/customer-form';
+  static const String managerReceiptForm     = '/manager/receipt-form';
+  static const String managerEmployeeDetail  = '/manager/employee-detail';
 
   // Employee
   static const String employee               = '/employee';
@@ -144,25 +152,25 @@ final GoRouter appRouter = GoRouter(
                 path: 'employees',
                 name: 'manager-employees',
                 pageBuilder: (context, state) =>
-                    _slide(state, const ManagerEmployeesScreen()),
+                    _slide(state, const EmployeesScreen()),
               ),
               GoRoute(
                 path: 'employee-payment',
                 name: 'manager-employee-payment',
                 pageBuilder: (context, state) =>
-                    _slide(state, const ManagerEmployeePaymentScreen()),
+                    _slide(state, EmployeePaymentScreen(employee: state.extra as Employee?)),
               ),
               GoRoute(
                 path: 'expense-tracker',
                 name: 'manager-expense-tracker',
                 pageBuilder: (context, state) =>
-                    _slide(state, const ManagerExpenseTrackerScreen()),
+                    _slide(state, const ExpenseTrackerScreen()),
               ),
               GoRoute(
                 path: 'notice',
                 name: 'manager-notice-drawer',
                 pageBuilder: (context, state) =>
-                    _slide(state, const ManagerNoticeScreen()),
+                    _slide(state, const NoticeScreen()),
               ),
               GoRoute(
                 path: 'design-gallery',
@@ -176,6 +184,24 @@ final GoRouter appRouter = GoRouter(
                 pageBuilder: (context, state) =>
                     _slide(state, const ManagerSettingsScreen()),
               ),
+              GoRoute(
+                path: 'customer-form',
+                name: 'manager-customer-form',
+                pageBuilder: (context, state) =>
+                    _slide(state, CustomerFormScreen(isEditing: (state.extra as bool?) ?? false)),
+              ),
+              GoRoute(
+                path: 'receipt-form',
+                name: 'manager-receipt-form',
+                pageBuilder: (context, state) =>
+                    _slide(state, const ReceiptFormScreen()),
+              ),
+              GoRoute(
+                path: 'employee-detail',
+                name: 'manager-employee-detail',
+                pageBuilder: (context, state) =>
+                    _slide(state, EmployeeDetailScreen(employee: state.extra as Employee)),
+              ),
             ],
           ),
         ]),
@@ -186,7 +212,27 @@ final GoRouter appRouter = GoRouter(
             path: AppRoutes.managerCustomers,
             name: 'manager-customers',
             pageBuilder: (context, state) =>
-                _slide(state, const ManagerCustomersScreen()),
+                _slide(state, const CustomersScreen()),
+            routes: [
+              GoRoute(
+                path: 'customer-form',
+                name: 'manager-customers-form',
+                pageBuilder: (context, state) => _slide(
+                  state,
+                  CustomerFormScreen(
+                      isEditing: (state.extra as bool?) ?? false),
+                ),
+              ),
+              GoRoute(
+                path: 'customer-detail',
+                name: 'manager-customer-detail',
+                pageBuilder: (context, state) => _slide(
+                  state,
+                  CustomerDetailScreen(
+                      customer: state.extra as CustomerData),
+                ),
+              ),
+            ],
           ),
         ]),
 
@@ -196,7 +242,7 @@ final GoRouter appRouter = GoRouter(
             path: AppRoutes.managerWorkQueue,
             name: 'manager-work-queue',
             pageBuilder: (context, state) =>
-                _slide(state, const ManagerWorkQueueScreen()),
+                _slide(state, const WorkQueueScreen()),
           ),
         ]),
 
@@ -206,7 +252,7 @@ final GoRouter appRouter = GoRouter(
             path: AppRoutes.managerCalendar,
             name: 'manager-calendar',
             pageBuilder: (context, state) =>
-                _slide(state, const ManagerCalendarScreen()),
+                _slide(state, const CalendarScreen()),
           ),
         ]),
 
@@ -216,7 +262,15 @@ final GoRouter appRouter = GoRouter(
             path: AppRoutes.managerReceipt,
             name: 'manager-receipt',
             pageBuilder: (context, state) =>
-                _slide(state, const ManagerReceiptScreen()),
+                _slide(state, const ReceiptScreen()),
+            routes: [
+              GoRoute(
+                path: 'receipt-view',
+                name: 'manager-receipt-view',
+                pageBuilder: (context, state) =>
+                    _slide(state, const ReceiptViewScreen()),
+              ),
+            ],
           ),
         ]),
       ],
