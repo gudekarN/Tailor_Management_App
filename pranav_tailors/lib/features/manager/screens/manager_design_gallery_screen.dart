@@ -11,8 +11,6 @@ import 'package:pranav_tailors/core/theme/app_theme.dart';
 //  Constants
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Set to false to hide manager-only actions (delete, FAB).
-const bool _kIsManager = true;
 
 /// Pool of placeholder colours/icons for newly added photos.
 const _kPreviewPool = [
@@ -199,7 +197,9 @@ List<_DesignPhoto> _buildDressPhotos() => [
 // ════════════════════════════════════════════════════════════════════════════
 
 class ManagerDesignGalleryScreen extends StatefulWidget {
-  const ManagerDesignGalleryScreen({super.key});
+  const ManagerDesignGalleryScreen({super.key, this.readOnly = false});
+  /// When true: FAB is hidden, long-press delete is disabled (employee mode).
+  final bool readOnly;
 
   @override
   State<ManagerDesignGalleryScreen> createState() =>
@@ -229,6 +229,8 @@ class _ManagerDesignGalleryScreenState
     super.dispose();
   }
 
+  bool get _isManager => !widget.readOnly;
+
   List<_DesignPhoto> get _currentPhotos =>
       _tab.index == 0 ? _blousePhotos : _dressPhotos;
 
@@ -245,7 +247,7 @@ class _ManagerDesignGalleryScreenState
           _buildGrid(_dressPhotos),
         ],
       ),
-      floatingActionButton: _kIsManager ? _buildFab() : null,
+      floatingActionButton: _isManager ? _buildFab() : null,
     );
   }
 
@@ -374,7 +376,7 @@ class _ManagerDesignGalleryScreenState
         photo: photos[i],
         onTap: () => _openFullScreen(photos, i),
         onLongPress:
-            _kIsManager ? () => _confirmDelete(photos, photos[i]) : null,
+            _isManager ? () => _confirmDelete(photos, photos[i]) : null,
       ),
     );
   }

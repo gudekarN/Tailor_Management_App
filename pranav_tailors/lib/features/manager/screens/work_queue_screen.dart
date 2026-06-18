@@ -552,39 +552,34 @@ class _InProgressCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // Row 2: assignee chip + action buttons
+                // Row 2: assignee chip + "Set New Date" (always visible)
                 Row(
                   children: [
                     _EmployeeChip(emp: emp),
                     const Spacer(),
-                    if (overdue)
-                      _OutlineButton(
-                        label: 'Set New Date',
-                        icon: Icons.edit_calendar_rounded,
-                        color: AppColors.error,
-                        onPressed: onSetDate,
-                      )
-                    else
-                      _OutlineButton(
-                        label: 'Reassign',
-                        icon: Icons.swap_horiz_rounded,
-                        color: AppColors.primary,
-                        onPressed: onReassign,
-                      ),
+                    // "Set New Date" is now shown for EVERY in-progress card.
+                    // Overdue cards keep the red (error) colour; others use primary.
+                    _OutlineButton(
+                      label: 'Set New Date',
+                      icon: Icons.edit_calendar_rounded,
+                      color: overdue ? AppColors.error : AppColors.primary,
+                      onPressed: onSetDate,
+                    ),
                   ],
                 ),
-                if (overdue) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: _OutlineButton(
-                      label: 'Reassign Employee',
-                      icon: Icons.swap_horiz_rounded,
-                      color: AppColors.primary,
-                      onPressed: onReassign,
-                    ),
+                // Reassign row — always shown below (full-width for easy tapping).
+                // Label is "Reassign Employee" for overdue items (matches existing
+                // overdue UX), plain "Reassign" for on-time items.
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: _OutlineButton(
+                    label: overdue ? 'Reassign Employee' : 'Reassign',
+                    icon: Icons.swap_horiz_rounded,
+                    color: AppColors.primary,
+                    onPressed: onReassign,
                   ),
-                ],
+                ),
               ],
             ),
           ),

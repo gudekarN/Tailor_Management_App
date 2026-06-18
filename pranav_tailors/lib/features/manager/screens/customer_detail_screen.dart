@@ -16,17 +16,20 @@ class CustomerData {
   const CustomerData({
     required this.name,
     required this.phone,
-    required this.age,
+    this.age = 0,            // legacy fallback; use computedAge for display
     required this.address,
     required this.initials,
     required this.totalOrders,
     required this.lastOrderDate,
     this.blouseMeasurements = const {},
-    this.dressMeasurements = const {},
+    this.dressMeasurements  = const {},
+    this.dateOfBirth,       // nullable; replaces the manual age field in the form
   });
 
   final String              name;
   final String              phone;
+  /// Stored fallback age — kept for dummy / legacy data that has no [dateOfBirth].
+  /// Prefer [computedAge] for all display purposes.
   final int                 age;
   final String              address;
   final String              initials;
@@ -35,6 +38,22 @@ class CustomerData {
   /// key = English field label, value = measurement string (e.g. '36"')
   final Map<String, String> blouseMeasurements;
   final Map<String, String> dressMeasurements;
+  /// Date of birth entered via the date-picker in the customer form.
+  final DateTime?           dateOfBirth;
+
+  /// Age in full years, calculated from [dateOfBirth] when available,
+  /// otherwise falls back to the stored [age] field.
+  int get computedAge {
+    final dob = dateOfBirth;
+    if (dob == null) return age;
+    final today = DateTime.now();
+    int years = today.year - dob.year;
+    if (today.month < dob.month ||
+        (today.month == dob.month && today.day < dob.day)) {
+      years--;
+    }
+    return years < 0 ? 0 : years;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -89,10 +108,13 @@ class CustomerDetailScreen extends StatefulWidget {
 class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  /// Mutable local copy — updated after each successful edit.
+  late CustomerData _customer;
 
   @override
   void initState() {
     super.initState();
+    _customer = widget.customer;
     _tab = TabController(length: 2, vsync: this)
       ..addListener(() => setState(() {}));
   }
@@ -103,21 +125,28 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     super.dispose();
   }
 
-  CustomerData get _c => widget.customer;
+  CustomerData get _c => _customer;
 
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [_buildAppBar(), _buildTabBar()],
-        body: TabBarView(
-          controller: _tab,
-          children: [
-            _BlouseMeasurementsTab(measurements: _c.blouseMeasurements),
-            _DressMeasurementsTab(measurements: _c.dressMeasurements),
-          ],
+    return PopScope(
+      // Pop back with the (possibly updated) customer data so the list refreshes
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.pop(_customer);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: NestedScrollView(
+          headerSliverBuilder: (_, __) => [_buildAppBar(), _buildTabBar()],
+          body: TabBarView(
+            controller: _tab,
+            children: [
+              _BlouseMeasurementsTab(measurements: _c.blouseMeasurements),
+              _DressMeasurementsTab(measurements: _c.dressMeasurements),
+            ],
+          ),
         ),
       ),
     );
@@ -132,14 +161,22 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
       foregroundColor: Colors.white,
       leading: BackButton(
         color: Colors.white,
-        onPressed: () => context.pop(),
+        onPressed: () => context.pop(_customer),
       ),
       actions: [
         IconButton(
           icon: const Icon(Icons.edit_rounded, color: Colors.white),
           tooltip: 'Edit Customer',
-          onPressed: () =>
-              context.push('/manager/customers/customer-form', extra: true),
+          onPressed: () async {
+            // Pass the full CustomerData as extra so the form pre-fills all fields
+            final updated = await context.push<CustomerData>(
+              '/manager/customers/customer-form',
+              extra: _customer,
+            );
+            if (updated != null) {
+              setState(() => _customer = updated);
+            }
+          },
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -197,7 +234,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                     const SizedBox(width: 8),
                     _WhiteChip(
                         icon: Icons.cake_rounded,
-                        label: '${_c.age} yrs'),
+                        label: '${_c.computedAge} yrs'),
                     const SizedBox(width: 8),
                     _WhiteChip(
                         icon: Icons.shopping_bag_rounded,

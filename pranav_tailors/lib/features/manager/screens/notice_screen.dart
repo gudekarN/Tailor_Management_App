@@ -4,10 +4,10 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:intl/intl.dart';
 import 'package:pranav_tailors/core/theme/app_theme.dart';
+import 'package:pranav_tailors/features/manager/screens/receipt_view_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Data models
@@ -344,9 +344,12 @@ class _NoticeScreenState extends State<NoticeScreen>
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
       itemCount: _notices.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, i) => _NoticeCard(
-        notice: _notices[i],
-        dateFmt: _dateFmt,
+      itemBuilder: (_, i) => GestureDetector(
+        onTap: () => _showNoticeSheet(_notices[i]),
+        child: _NoticeCard(
+          notice: _notices[i],
+          dateFmt: _dateFmt,
+        ),
       ),
     );
   }
@@ -604,9 +607,177 @@ class _NoticeScreenState extends State<NoticeScreen>
     );
   }
 
-  // ── Due order detail bottom sheet ─────────────────────────────────────────
+  // ── Notice full-view bottom sheet ─────────────────────────────────────────
+  void _showNoticeSheet(_Notice notice) {
+    Color stripeColor;
+    String priorityLabel;
+    switch (notice.priority) {
+      case _NoticePriority.urgent:
+        stripeColor   = AppColors.error;
+        priorityLabel = 'Urgent';
+        break;
+      case _NoticePriority.important:
+        stripeColor   = AppColors.urgent;
+        priorityLabel = 'Important';
+        break;
+      case _NoticePriority.normal:
+        stripeColor   = AppColors.primary;
+        priorityLabel = 'General';
+        break;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.90,
+        expand: false,
+        builder: (_, scrollCtrl) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 4),
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Priority stripe accent line
+              Container(
+                height: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: stripeColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Scrollable content
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Priority chip
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: stripeColor.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: stripeColor.withValues(alpha: 0.35)),
+                        ),
+                        child: Text(priorityLabel,
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: stripeColor)),
+                      ),
+                      const SizedBox(height: 10),
+                      // Title
+                      Text(
+                        notice.title,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Date + Posted by
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded,
+                              size: 12, color: AppColors.textHint),
+                          const SizedBox(width: 4),
+                          Text(_dateFmt.format(notice.date),
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11.5,
+                                  color: AppColors.textHint)),
+                          const SizedBox(width: 14),
+                          const Icon(Icons.person_rounded,
+                              size: 12, color: AppColors.textHint),
+                          const SizedBox(width: 4),
+                          Text('Posted by ${notice.postedBy}',
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11.5,
+                                  color: AppColors.textHint)),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const Divider(color: AppColors.border, height: 1),
+                      const SizedBox(height: 14),
+                      // Full message
+                      Text(
+                        notice.message,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13.5,
+                          color: AppColors.textPrimary,
+                          height: 1.65,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+              // Close button
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                    20, 8, 20, 12 + MediaQuery.of(context).padding.bottom),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Close',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Due order detail — open receipt view ──────────────────────────────────
   void _showOrderDetail(_DueOrder order) {
-    context.push('/manager/receipt', extra: order);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReceiptViewScreen(
+          generatedBy: 'Manager',
+          showActions: true,
+        ),
+      ),
+    );
   }
 }
 

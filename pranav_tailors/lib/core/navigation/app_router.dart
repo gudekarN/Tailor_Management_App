@@ -55,7 +55,7 @@ import 'package:pranav_tailors/features/manager/screens/notice_screen.dart';
 import 'package:pranav_tailors/features/manager/screens/manager_design_gallery_screen.dart';
 import 'package:pranav_tailors/features/manager/screens/manager_settings_screen.dart';
 import 'package:pranav_tailors/features/manager/screens/customer_form_screen.dart';
-import 'package:pranav_tailors/features/manager/screens/customer_detail_screen.dart';
+import 'package:pranav_tailors/features/manager/screens/customer_detail_screen.dart'; // CustomerData
 import 'package:pranav_tailors/features/manager/screens/receipt_form_screen.dart';
 import 'package:pranav_tailors/features/manager/screens/employee_detail_screen.dart';
 
@@ -67,6 +67,7 @@ import 'package:pranav_tailors/features/employee/screens/employee_receipt_screen
 import 'package:pranav_tailors/features/employee/screens/employee_notice_screen.dart';
 import 'package:pranav_tailors/features/employee/screens/employee_design_gallery_screen.dart';
 import 'package:pranav_tailors/features/employee/screens/employee_my_payment_screen.dart';
+import 'package:pranav_tailors/features/employee/screens/employee_more_screen.dart';
 import 'package:pranav_tailors/features/employee/screens/employee_settings_screen.dart';
 
 // ── Route name constants ──────────────────────────────────────────────────
@@ -102,10 +103,10 @@ abstract class AppRoutes {
   static const String employeeReceipt        = '/employee/receipt';
   static const String employeeNotice         = '/employee/notice';
   static const String employeeMore           = '/employee/more';
-  // Employee drawer
-  static const String employeeDesignGallery  = '/employee/design-gallery';
-  static const String employeeMyPayment      = '/employee/my-payment';
-  static const String employeeSettings       = '/employee/settings';
+  // Employee more sub-routes
+  static const String employeeDesignGallery  = '/employee/more/design-gallery';
+  static const String employeeMyPayment      = '/employee/more/my-payment';
+  static const String employeeSettings       = '/employee/more/settings';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -187,8 +188,11 @@ final GoRouter appRouter = GoRouter(
               GoRoute(
                 path: 'customer-form',
                 name: 'manager-customer-form',
-                pageBuilder: (context, state) =>
-                    _slide(state, CustomerFormScreen(isEditing: (state.extra as bool?) ?? false)),
+                pageBuilder: (context, state) => _slide(
+                  state,
+                  CustomerFormScreen(
+                      existingCustomer: state.extra as CustomerData?),
+                ),
               ),
               GoRoute(
                 path: 'receipt-form',
@@ -220,7 +224,7 @@ final GoRouter appRouter = GoRouter(
                 pageBuilder: (context, state) => _slide(
                   state,
                   CustomerFormScreen(
-                      isEditing: (state.extra as bool?) ?? false),
+                      existingCustomer: state.extra as CustomerData?),
                 ),
               ),
               GoRoute(
@@ -267,8 +271,12 @@ final GoRouter appRouter = GoRouter(
               GoRoute(
                 path: 'receipt-view',
                 name: 'manager-receipt-view',
-                pageBuilder: (context, state) =>
-                    _slide(state, const ReceiptViewScreen()),
+                pageBuilder: (context, state) => _slide(
+                  state,
+                  ReceiptViewScreen(
+                    generatedBy: (state.extra as String?) ?? 'Manager',
+                  ),
+                ),
               ),
             ],
           ),
@@ -291,27 +299,6 @@ final GoRouter appRouter = GoRouter(
             name: 'employee-home',
             pageBuilder: (context, state) =>
                 _slide(state, const EmployeeHomeScreen()),
-            // Drawer sub-routes pushed on top
-            routes: [
-              GoRoute(
-                path: 'design-gallery',
-                name: 'employee-design-gallery',
-                pageBuilder: (context, state) =>
-                    _slide(state, const EmployeeDesignGalleryScreen()),
-              ),
-              GoRoute(
-                path: 'my-payment',
-                name: 'employee-my-payment',
-                pageBuilder: (context, state) =>
-                    _slide(state, const EmployeeMyPaymentScreen()),
-              ),
-              GoRoute(
-                path: 'settings',
-                name: 'employee-settings',
-                pageBuilder: (context, state) =>
-                    _slide(state, const EmployeeSettingsScreen()),
-              ),
-            ],
           ),
         ]),
 
@@ -345,15 +332,33 @@ final GoRouter appRouter = GoRouter(
           ),
         ]),
 
-        // Branch 4 — More (placeholder)
+        // Branch 4 — More
         StatefulShellBranch(routes: [
           GoRoute(
             path: AppRoutes.employeeMore,
             name: 'employee-more',
-            pageBuilder: (context, state) => _slide(
-              state,
-              const _MorePlaceholder(),
-            ),
+            pageBuilder: (context, state) =>
+                _slide(state, const EmployeeMoreScreen()),
+            routes: [
+              GoRoute(
+                path: 'design-gallery',
+                name: 'employee-more-design-gallery',
+                pageBuilder: (context, state) =>
+                    _slide(state, const EmployeeDesignGalleryScreen()),
+              ),
+              GoRoute(
+                path: 'my-payment',
+                name: 'employee-more-my-payment',
+                pageBuilder: (context, state) =>
+                    _slide(state, const EmployeeMyPaymentScreen()),
+              ),
+              GoRoute(
+                path: 'settings',
+                name: 'employee-more-settings',
+                pageBuilder: (context, state) =>
+                    _slide(state, const EmployeeSettingsScreen()),
+              ),
+            ],
           ),
         ]),
       ],
@@ -404,11 +409,3 @@ CustomTransitionPage<void> _slide(GoRouterState state, Widget child) {
   );
 }
 
-// ── "More" placeholder widget ─────────────────────────────────────────────
-class _MorePlaceholder extends StatelessWidget {
-  const _MorePlaceholder();
-  @override
-  Widget build(BuildContext context) => const Scaffold(
-        body: Center(child: Text('More')),
-      );
-}

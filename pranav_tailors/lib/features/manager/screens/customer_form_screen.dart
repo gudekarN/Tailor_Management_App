@@ -9,7 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:intl/intl.dart';
+
 import 'package:pranav_tailors/core/theme/app_theme.dart';
+import 'package:pranav_tailors/features/manager/screens/customer_detail_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Measurement field definitions
@@ -60,8 +63,13 @@ const _kTabHeights = [820.0, 1250.0];
 // ════════════════════════════════════════════════════════════════════════════
 
 class CustomerFormScreen extends StatefulWidget {
-  const CustomerFormScreen({super.key, this.isEditing = false});
-  final bool isEditing;
+  /// Pass [existingCustomer] to open the form in edit-mode pre-filled with
+  /// that customer's data. Leave null to open in add-mode.
+  const CustomerFormScreen({super.key, this.existingCustomer});
+  final CustomerData? existingCustomer;
+
+  /// True when editing an existing customer, false when adding a new one.
+  bool get isEditing => existingCustomer != null;
 
   @override
   State<CustomerFormScreen> createState() => _CustomerFormScreenState();
@@ -80,9 +88,22 @@ class _CustomerFormScreenState extends State<CustomerFormScreen>
   // ── Personal info ───────────────────────────────────────────────────────
   final _formKey     = GlobalKey<FormState>();
   final _nameCtrl    = TextEditingController();
-  final _ageCtrl     = TextEditingController();
   final _phoneCtrl   = TextEditingController();
   final _addressCtrl = TextEditingController();
+
+  // ── Date of Birth (replaces the plain age text field) ───────────────────
+  DateTime? _selectedDob;
+
+  /// Returns the age in full years from [_selectedDob], or -1 when not set.
+  int get _computedAge {
+    final dob = _selectedDob;
+    if (dob == null) return -1;
+    final today = DateTime.now();
+    int years = today.year - dob.year;
+    if (today.month < dob.month ||
+        (today.month == dob.month && today.day < dob.day)) years--;
+    return years < 0 ? 0 : years;
+  }
 
   // ── Measurement controllers ─────────────────────────────────────────────
   late final List<TextEditingController> _blouseCtrls;
@@ -112,6 +133,37 @@ class _CustomerFormScreenState extends State<CustomerFormScreen>
         (_) => TextEditingController());
     _dressLowerCtrls = List.generate(
         _kDressLowerFields.length, (_) => TextEditingController());
+
+    // ── Pre-fill when editing ───────────────────────────────────────────────
+    final e = widget.existingCustomer;
+    if (e != null) {
+      _nameCtrl.text    = e.name;
+      _phoneCtrl.text   = e.phone;
+      _addressCtrl.text = e.address;
+      _selectedDob      = e.dateOfBirth; // restore date-of-birth if present
+
+      // Blouse fields
+      for (int i = 0; i < _kBlouseFields.length; i++) {
+        _blouseCtrls[i].text =
+            e.blouseMeasurements[_kBlouseFields[i].english] ?? '';
+      }
+
+      // Dress upper = blouseFields + extra
+      final allUpper = [..._kBlouseFields, ..._kDressUpperExtra];
+      for (int i = 0; i < allUpper.length; i++) {
+        _dressUpperCtrls[i].text =
+            e.dressMeasurements['upper_${allUpper[i].english}'] ?? '';
+      }
+
+      // Dress lower
+      for (int i = 0; i < _kDressLowerFields.length; i++) {
+        _dressLowerCtrls[i].text =
+            e.dressMeasurements['lower_${_kDressLowerFields[i].english}'] ?? '';
+      }
+
+      // Dupatta
+      _dupatta = e.dressMeasurements['dupatta'] == 'yes';
+    }
   }
 
   @override
@@ -119,12 +171,42 @@ class _CustomerFormScreenState extends State<CustomerFormScreen>
     _tabCtrl.removeListener(_onTabChange);
     _tabCtrl.dispose();
     for (final c in [
-      _nameCtrl, _ageCtrl, _phoneCtrl, _addressCtrl,
+      _nameCtrl, _phoneCtrl, _addressCtrl,
       ..._blouseCtrls, ..._dressUpperCtrls, ..._dressLowerCtrls,
     ]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  // ── Date of Birth picker ─────────────────────────────────────────────────
+
+  Future<void> _pickDob() async {
+    final now = DateTime.now();
+    final initial = _selectedDob ??
+        DateTime(now.year - 25, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1940),
+      lastDate: now,
+      helpText: 'Select Date of Birth',
+      builder: (context, child) {
+        // Tint date-picker to the Blush Rose primary colour.
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) setState(() => _selectedDob = picked);
   }
 
   // ── Photo helpers ────────────────────────────────────────────────────────
@@ -213,7 +295,49 @@ class _CustomerFormScreenState extends State<CustomerFormScreen>
       );
       return;
     }
-    Navigator.of(context).pop();
+
+    // Build blouse measurement map
+    final blouseMap = <String, String>{};
+    for (int i = 0; i < _kBlouseFields.length; i++) {
+      final v = _blouseCtrls[i].text.trim();
+      if (v.isNotEmpty) blouseMap[_kBlouseFields[i].english] = v;
+    }
+
+    // Build dress measurement map
+    final allUpper = [..._kBlouseFields, ..._kDressUpperExtra];
+    final dressMap = <String, String>{};
+    for (int i = 0; i < allUpper.length; i++) {
+      final v = _dressUpperCtrls[i].text.trim();
+      if (v.isNotEmpty) dressMap['upper_${allUpper[i].english}'] = v;
+    }
+    for (int i = 0; i < _kDressLowerFields.length; i++) {
+      final v = _dressLowerCtrls[i].text.trim();
+      if (v.isNotEmpty) dressMap['lower_${_kDressLowerFields[i].english}'] = v;
+    }
+    dressMap['dupatta'] = _dupatta ? 'yes' : 'no';
+
+    // Build initials from name
+    final nameParts = _nameCtrl.text.trim().split(' ');
+    final initials = nameParts.length >= 2
+        ? '${nameParts.first[0]}${nameParts.last[0]}'.toUpperCase()
+        : _nameCtrl.text.trim().substring(0, 1).toUpperCase();
+
+    final updated = CustomerData(
+      name:                _nameCtrl.text.trim(),
+      phone:               _phoneCtrl.text.trim(),
+      // age falls back to legacy value; computedAge derives it from DOB at runtime
+      age:                 widget.existingCustomer?.age ?? 0,
+      address:             _addressCtrl.text.trim(),
+      initials:            initials,
+      totalOrders:         widget.existingCustomer?.totalOrders ?? 0,
+      lastOrderDate:       widget.existingCustomer?.lastOrderDate ?? '',
+      blouseMeasurements:  blouseMap,
+      dressMeasurements:   dressMap,
+      dateOfBirth:         _selectedDob,
+    );
+
+    // Return the updated record to the caller (detail screen or list screen)
+    Navigator.of(context).pop(updated);
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -356,29 +480,65 @@ class _CustomerFormScreenState extends State<CustomerFormScreen>
   }
 
   Widget _buildPersonalInfoCard() {
+    final age = _computedAge;
     return _SectionCard(
       title: 'Personal Information',
       icon: Icons.person_rounded,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldRow(children: [
-            _FormField(
-              label: 'Full Name',
-              controller: _nameCtrl,
-              hint: 'e.g. Priya Sharma',
-              isRequired: true,
-              flex: 3,
-            ),
-            _FormField(
-              label: 'Age',
-              controller: _ageCtrl,
-              hint: 'yrs',
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              flex: 1,
-            ),
-          ]),
+          // ── Full Name ──────────────────────────────────────────────────
+          _FormField(
+            label: 'Full Name',
+            controller: _nameCtrl,
+            hint: 'e.g. Priya Sharma',
+            isRequired: true,
+          ),
           const SizedBox(height: 12),
+
+          // ── Date of Birth (tappable field) ─────────────────────────────
+          _DobPickerField(
+            selectedDate: _selectedDob,
+            onTap: _pickDob,
+          ),
+          const SizedBox(height: 8),
+
+          // ── Computed Age (read-only badge) ─────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight.withValues(alpha: 0.40),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: age >= 0
+                    ? AppColors.primary.withValues(alpha: 0.25)
+                    : AppColors.border,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cake_rounded,
+                  size: 14,
+                  color: age >= 0 ? AppColors.primary : AppColors.textHint,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  age >= 0 ? 'Age: $age yrs' : 'Age: —',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: age >= 0 ? AppColors.primary : AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Phone ──────────────────────────────────────────────────────
           _FormField(
             label: 'Phone Number',
             controller: _phoneCtrl,
@@ -389,6 +549,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen>
             maxLength: 10,
           ),
           const SizedBox(height: 12),
+
+          // ── Address ────────────────────────────────────────────────────
           _FormField(
             label: 'Address',
             controller: _addressCtrl,
@@ -704,6 +866,82 @@ class _DressTabContent extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  DOB picker field  (tappable, read-only, styled like _FormField)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _DobPickerField extends StatelessWidget {
+  const _DobPickerField({required this.selectedDate, required this.onTap});
+  final DateTime? selectedDate;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDate = selectedDate != null;
+    final display = hasDate
+        ? DateFormat('dd/MM/yyyy').format(selectedDate!)
+        : 'dd / MM / yyyy';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Date of Birth',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 5),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: hasDate
+                    ? AppColors.primary.withValues(alpha: 0.60)
+                    : AppColors.border,
+                width: hasDate ? 1.5 : 1.0,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 16,
+                  color: hasDate ? AppColors.primary : AppColors.textHint,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  display,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13.5,
+                    color: hasDate ? AppColors.textPrimary : AppColors.textHint,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.arrow_drop_down_rounded,
+                  color: hasDate ? AppColors.primary : AppColors.textHint,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  Reusable widgets
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -767,25 +1005,6 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-/// Side-by-side row of form fields
-class _FieldRow extends StatelessWidget {
-  const _FieldRow({required this.children});
-  final List<_FormField> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (int i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          Expanded(flex: children[i].flex, child: children[i]),
-        ],
-      ],
-    );
-  }
-}
-
 /// Labeled text-form-field
 class _FormField extends StatelessWidget {
   const _FormField({
@@ -797,7 +1016,6 @@ class _FormField extends StatelessWidget {
     this.inputFormatters,
     this.maxLines = 1,
     this.maxLength,
-    this.flex = 1,
   });
 
   final String label;
@@ -808,7 +1026,6 @@ class _FormField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final int maxLines;
   final int? maxLength;
-  final int flex;
 
   @override
   Widget build(BuildContext context) {

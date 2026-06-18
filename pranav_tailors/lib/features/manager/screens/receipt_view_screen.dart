@@ -5,17 +5,28 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:pranav_tailors/core/theme/app_theme.dart';
 
+// ── Item work-status ──────────────────────────────────────────────────────────
+
+enum _ItemWorkStatus { complete, inProgress, unassigned }
+
 // ── Dummy item model ──────────────────────────────────────────────────────────
 
 class _ReceiptItem {
-  const _ReceiptItem(this.name, this.price, [this.imagePath]);
-  final String name;
-  final double price;
-  final String? imagePath;
+  const _ReceiptItem(
+    this.name,
+    this.price, {
+    this.workStatus = _ItemWorkStatus.unassigned,
+    this.assignedTo,
+  });
+  final String          name;
+  final double          price;
+  final _ItemWorkStatus workStatus;
+  final String?         assignedTo; // only relevant for inProgress
 }
 
 // ── Dummy receipt data ────────────────────────────────────────────────────────
@@ -27,13 +38,15 @@ abstract class _Dummy {
   static const phone        = '9876543210';
   static const address      = 'Shivaji Nagar, Pune - 411005';
   static const deliveryDate = '20 Jun 2026';
-  static const generatedBy  = 'Manager';
   static const isUrgent     = true;
 
   static const items = [
-    _ReceiptItem('Silk Blouse × 2',     1800.0, null),
-    _ReceiptItem('Salwar Kameez',       2400.0, null),
-    _ReceiptItem('Lehenga Blouse',      1500.0, null),
+    _ReceiptItem('Silk Blouse × 2',  1800.0,
+        workStatus: _ItemWorkStatus.complete),
+    _ReceiptItem('Salwar Kameez',     2400.0,
+        workStatus: _ItemWorkStatus.inProgress, assignedTo: 'Sunita'),
+    _ReceiptItem('Lehenga Blouse',    1500.0,
+        workStatus: _ItemWorkStatus.unassigned),
   ];
 
   static const designExtra  = 200.0;
@@ -102,7 +115,18 @@ const _kMr = {
 // ════════════════════════════════════════════════════════════════════════════
 
 class ReceiptViewScreen extends StatefulWidget {
-  const ReceiptViewScreen({super.key});
+  const ReceiptViewScreen({
+    super.key,
+    this.generatedBy = 'Manager',
+    this.showActions = true,
+  });
+
+  /// The name of who created this receipt (e.g. "Manager", "Sunita", "Kaveri").
+  final String generatedBy;
+
+  /// When false, hides the language toggle and WhatsApp share button
+  /// (used when opened from the Employee side).
+  final bool showActions;
 
   @override
   State<ReceiptViewScreen> createState() => _ReceiptViewScreenState();
@@ -180,7 +204,7 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(),
+      bottomNavigationBar: widget.showActions ? _buildBottomBar() : null,
     );
   }
 
@@ -369,7 +393,7 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
                     const SizedBox(height: 8),
                     _ReceiptField(label: _l('delivery'),  value: _Dummy.deliveryDate),
                     const SizedBox(height: 8),
-                    _ReceiptField(label: _l('generated'), value: _Dummy.generatedBy),
+                    _ReceiptField(label: _l('generated'), value: widget.generatedBy),
                   ],
                 ),
               ),
@@ -424,11 +448,32 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
 
           // Item rows
           ...List.generate(_Dummy.items.length, (i) {
-            final item = _Dummy.items[i];
-            final isAlt = i.isOdd;
+            final item   = _Dummy.items[i];
+            final isAlt  = i.isOdd;
+
+            // Status badge config
+            final Color  statusColor;
+            final IconData statusIcon;
+            final String statusLabel;
+            switch (item.workStatus) {
+              case _ItemWorkStatus.complete:
+                statusColor  = AppColors.success;
+                statusIcon   = Icons.check_circle_rounded;
+                statusLabel  = '✓ Completed';
+                break;
+              case _ItemWorkStatus.inProgress:
+                statusColor  = const Color(0xFF1565C0);
+                statusIcon   = Icons.settings_rounded;
+                statusLabel  = '⚙ In Progress';
+                break;
+              case _ItemWorkStatus.unassigned:
+                statusColor  = AppColors.urgent;
+                statusIcon   = Icons.bolt_rounded;
+                statusLabel  = '⚡ Unassigned';
+                break;
+            }
+
             return Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: isAlt
                     ? AppColors.surface2.withValues(alpha: 0.50)
@@ -436,53 +481,138 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
                 border: const Border(
                     bottom: BorderSide(color: AppColors.border, width: 0.5)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 28,
-                    child: Text('${i + 1}.',
-                        style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 12,
-                            color: AppColors.textHint)),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(item.name,
-                        style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textPrimary)),
-                  ),
-                  SizedBox(
-                    width: 50,
-                    child: Center(
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface2,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
-                          image: item.imagePath != null
-                              ? DecorationImage(
-                                  image: NetworkImage(item.imagePath!),
-                                  fit: BoxFit.cover)
-                              : null,
+                  // Main item row
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 28,
+                          child: Text('${i + 1}.',
+                              style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 12,
+                                  color: AppColors.textHint)),
                         ),
-                        child: item.imagePath == null
-                            ? const Icon(Icons.image_rounded, size: 20, color: AppColors.textHint)
-                            : null,
-                      ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(item.name,
+                              style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textPrimary)),
+                        ),
+                        SizedBox(
+                          width: 50,
+                          child: Center(
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.surface2,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: const Icon(Icons.image_rounded,
+                                  size: 20, color: AppColors.textHint),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 80,
+                          child: Text('₹${_fmt.format(item.price)}',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary)),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(
-                    width: 80,
-                    child: Text('₹${_fmt.format(item.price)}',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary)),
+
+                  // Status badge row
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(40, 0, 12, 8),
+                    child: Row(
+                      children: [
+                        // Status pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: statusColor.withValues(alpha: 0.40)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(statusIcon,
+                                  size: 11, color: statusColor),
+                              const SizedBox(width: 4),
+                              Text(statusLabel,
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: statusColor)),
+                            ],
+                          ),
+                        ),
+                        // In-progress: show worker name
+                        if (item.workStatus == _ItemWorkStatus.inProgress &&
+                            item.assignedTo != null) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.person_rounded,
+                              size: 12,
+                              color: AppColors.textHint),
+                          const SizedBox(width: 3),
+                          Text('Working: ${item.assignedTo}',
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10.5,
+                                  color: AppColors.textSecondary)),
+                        ],
+                        // Unassigned: show assign button
+                        if (item.workStatus == _ItemWorkStatus.unassigned) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () =>
+                                context.push('/manager/work-queue'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.40)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.assignment_ind_rounded,
+                                      size: 11, color: AppColors.primary),
+                                  SizedBox(width: 4),
+                                  Text('Assign in Work Queue',
+                                      style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),
