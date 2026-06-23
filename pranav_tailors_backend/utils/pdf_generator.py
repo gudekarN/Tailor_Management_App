@@ -1,0 +1,251 @@
+"""
+ReportLab-based PDF receipt generator for Pranav Ladies Tailors.
+"""
+import logging
+import os
+from datetime import date
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+)
+
+logger = logging.getLogger(__name__)
+
+RECEIPTS_DIR = "uploads/receipts"
+os.makedirs(RECEIPTS_DIR, exist_ok=True)
+
+# ── Colour palette ────────────────────────────────────────────────────────────
+GOLD   = colors.HexColor("#C9A84C")
+BLACK  = colors.black
+WHITE  = colors.white
+LIGHT  = colors.HexColor("#F9F6F0")
+DARK   = colors.HexColor("#1A1A1A")
+
+
+def _styles() -> dict:
+    base = getSampleStyleSheet()
+    return {
+        "scissors": ParagraphStyle(
+            "scissors", fontSize=18, alignment=TA_CENTER, textColor=GOLD,
+            spaceAfter=2
+        ),
+        "shop_name": ParagraphStyle(
+            "shop_name", fontName="Helvetica-Bold", fontSize=20,
+            alignment=TA_CENTER, textColor=DARK, spaceAfter=2
+        ),
+        "shop_sub": ParagraphStyle(
+            "shop_sub", fontSize=9, alignment=TA_CENTER, textColor=colors.grey,
+            spaceAfter=1
+        ),
+        "shop_addr": ParagraphStyle(
+            "shop_addr", fontSize=8, alignment=TA_CENTER, textColor=colors.grey,
+            spaceAfter=6
+        ),
+        "section_label": ParagraphStyle(
+            "section_label", fontName="Helvetica-Bold", fontSize=9,
+            textColor=colors.grey
+        ),
+        "section_value": ParagraphStyle(
+            "section_value", fontSize=9, textColor=DARK
+        ),
+        "receipt_no": ParagraphStyle(
+            "receipt_no", fontName="Helvetica-Bold", fontSize=11,
+            textColor=GOLD, alignment=TA_RIGHT
+        ),
+        "footer": ParagraphStyle(
+            "footer", fontSize=7.5, textColor=colors.grey,
+            alignment=TA_CENTER, leading=10
+        ),
+    }
+
+
+async def generate_receipt_pdf(order_id: int, db) -> str:
+    """
+    Generate a PDF receipt for the given order.
+
+    Returns the absolute file path of the created PDF.
+    """
+    from sqlalchemy.future import select
+    from sqlalchemy.orm import selectinload
+    from models.order import Order, OrderItem
+    from models.customer import Customer
+    from models.user import User
+
+    # ── Load order ─────────────────────────────────────────────────────────────
+    stmt = (
+        select(Order)
+        .options(
+            selectinload(Order.customer),
+            selectinload(Order.items),
+            selectinload(Order.generator),
+        )
+        .where(Order.id == order_id)
+    )
+    res = await db.execute(stmt)
+    order: Order = res.scalar_one_or_none()
+
+    if not order:
+        raise ValueError(f"Order {order_id} not found")
+
+    customer: Customer = order.customer
+    items: list[OrderItem] = order.items
+    generated_by_name = order.generator.name if order.generator else "—"
+
+    file_path = os.path.join(RECEIPTS_DIR, f"receipt_{order_id}.pdf")
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=A4,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+    )
+
+    styles = _styles()
+    story = []
+
+    # ── Header ─────────────────────────────────────────────────────────────────
+    story.append(Paragraph("✂", styles["scissors"]))
+    story.append(Paragraph("Pranav Ladies Tailors", styles["shop_name"]))
+    story.append(Paragraph(
+        "Ladies Dress &amp; Blouse Specialist | Pico, Fall, Beading Center",
+        styles["shop_sub"]
+    ))
+    story.append(Paragraph(
+        "Madhavashram Lodge, Front of Tulasi Emporium, M.G. Road, Mahad",
+        styles["shop_addr"]
+    ))
+
+    # Gold divider
+    story.append(HRFlowable(width="100%", thickness=1.5, color=GOLD, spaceAfter=6))
+
+    # ── Receipt no + date ──────────────────────────────────────────────────────
+    header_data = [
+        [
+            Paragraph(
+                f"<b>Receipt No:</b> {order.receipt_no}", styles["section_value"]
+            ),
+            Paragraph(
+                f"Date: {order.created_at.strftime('%d %b %Y')}",
+                styles["receipt_no"]
+            ),
+        ]
+    ]
+    header_table = Table(header_data, colWidths=["60%", "40%"])
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story.append(header_table)
+    story.append(Spacer(1, 4 * mm))
+
+    # ── Customer details ───────────────────────────────────────────────────────
+    cust_data = [
+        ["Customer", ":", customer.name],
+        ["Phone",    ":", customer.phone],
+        ["Address",  ":", customer.address or "—"],
+        ["Delivery", ":", order.delivery_date.strftime("%d %b %Y")],
+        ["Generated By", ":", generated_by_name],
+    ]
+    if order.is_urgent:
+        cust_data.append(["Status", ":", "⚡ URGENT"])
+
+    cust_table = Table(
+        cust_data,
+        colWidths=[30 * mm, 6 * mm, "auto"],
+    )
+    cust_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.grey),
+        ("TEXTCOLOR", (2, 0), (2, -1), DARK),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    story.append(cust_table)
+    story.append(Spacer(1, 5 * mm))
+
+    # ── Items table ────────────────────────────────────────────────────────────
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GOLD, spaceAfter=3))
+
+    item_rows = [
+        [
+            Paragraph("<b>Sr</b>", ParagraphStyle("th", fontName="Helvetica-Bold", fontSize=9, textColor=WHITE, alignment=TA_CENTER)),
+            Paragraph("<b>Item Name</b>", ParagraphStyle("th", fontName="Helvetica-Bold", fontSize=9, textColor=WHITE)),
+            Paragraph("<b>Price (₹)</b>", ParagraphStyle("th", fontName="Helvetica-Bold", fontSize=9, textColor=WHITE, alignment=TA_RIGHT)),
+        ]
+    ]
+    for idx, item in enumerate(items, 1):
+        item_rows.append([
+            Paragraph(str(idx), ParagraphStyle("td_c", fontSize=9, alignment=TA_CENTER)),
+            Paragraph(item.item_name, ParagraphStyle("td", fontSize=9)),
+            Paragraph(f"{item.price:,.2f}", ParagraphStyle("td_r", fontSize=9, alignment=TA_RIGHT)),
+        ])
+
+    # Extra charge row
+    if order.design_extra_charge:
+        item_rows.append([
+            Paragraph("", ParagraphStyle("td", fontSize=9)),
+            Paragraph("<i>Design Extra Charge</i>", ParagraphStyle("td_i", fontSize=9, textColor=colors.grey)),
+            Paragraph(f"{order.design_extra_charge:,.2f}", ParagraphStyle("td_r", fontSize=9, alignment=TA_RIGHT, textColor=colors.grey)),
+        ])
+
+    # Urgent cost row
+    if order.is_urgent and order.urgent_cost:
+        item_rows.append([
+            Paragraph("", ParagraphStyle("td", fontSize=9)),
+            Paragraph("⚡ Urgent Charge", ParagraphStyle("td_u", fontSize=9, textColor=colors.orange)),
+            Paragraph(f"{order.urgent_cost:,.2f}", ParagraphStyle("td_r", fontSize=9, alignment=TA_RIGHT, textColor=colors.orange)),
+        ])
+
+    items_table = Table(item_rows, colWidths=[12 * mm, "auto", 32 * mm])
+    items_table.setStyle(TableStyle([
+        # Header row background
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT]),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#DDDDDD")),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 4 * mm))
+
+    # ── Summary section ────────────────────────────────────────────────────────
+    summary_data = [
+        ["Total",        f"₹ {order.total:,.2f}"],
+        ["Advance Paid", f"₹ {order.advance_paid:,.2f}"],
+        ["Remaining",    f"₹ {order.remaining:,.2f}"],
+    ]
+    summary_table = Table(summary_data, colWidths=["60%", "40%"])
+    summary_table.setStyle(TableStyle([
+        ("FONTNAME",  (0, 0), (-1, -1), "Helvetica"),
+        ("FONTNAME",  (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE",  (0, 0), (-1, -1), 10),
+        ("ALIGN",     (1, 0), (1, -1), "RIGHT"),
+        ("TEXTCOLOR", (0, -1), (-1, -1), GOLD),
+        ("FONTSIZE",  (0, -1), (-1, -1), 12),
+        ("TOPPADDING",    (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEABOVE", (0, -1), (-1, -1), 1, GOLD),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 6 * mm))
+
+    # ── Footer ─────────────────────────────────────────────────────────────────
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GOLD, spaceAfter=4))
+    story.append(Paragraph(
+        "Delivery will be given in the evening on delivery date. "
+        "We are not responsible if clothes not collected within 2 months of order.",
+        styles["footer"],
+    ))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Thank you for choosing Pranav Ladies Tailors ✂", styles["footer"]))
+
+    doc.build(story)
+    logger.info("PDF generated: %s", file_path)
+    return file_path

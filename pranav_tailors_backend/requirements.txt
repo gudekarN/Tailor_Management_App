@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+psycopg2-binary
+asyncpg
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+python-multipart
+pillow
+firebase-admin
+apscheduler
+twilio
+reportlab
+alembic
+python-dotenv
+pydantic-settings
